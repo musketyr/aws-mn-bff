@@ -1,0 +1,105 @@
+plugins {
+    id "io.spring.dependency-management" version "1.0.6.RELEASE"
+    id "com.github.johnrengelman.shadow" version "4.0.2"
+    id "application"
+    id "java"
+    id "net.ltgt.apt-eclipse" version "0.21"
+    id "net.ltgt.apt-idea" version "0.21"
+    id "com.bmuschko.docker-remote-api" version "4.4.0"
+    id "com.patdouble.awsecr" version "0.5.1"
+    id "fi.evident.beanstalk" version "0.2.1"
+}
+
+group "beanstalk.app"
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven { url "https://jcenter.bintray.com" }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'io.micronaut:micronaut-bom:1.1.0.RC1'
+    }
+}
+
+configurations {
+    // for dependencies that are needed for development only
+    developmentOnly 
+}
+
+dependencies {
+    annotationProcessor "io.micronaut:micronaut-inject-java"
+    annotationProcessor "io.micronaut:micronaut-validation"
+    compile "io.micronaut:micronaut-inject"
+    compile "io.micronaut:micronaut-validation"
+    compile "io.micronaut:micronaut-runtime"
+    compile "io.micronaut:micronaut-http-client"
+    compile "io.micronaut:micronaut-http-server-netty"
+    runtime "ch.qos.logback:logback-classic:1.2.3"
+    testAnnotationProcessor "io.micronaut:micronaut-inject-java"
+    testCompile "org.junit.jupiter:junit-jupiter-api"
+    testCompile "io.micronaut.test:micronaut-test-junit5"
+    testRuntime "org.junit.jupiter:junit-jupiter-engine"
+}
+
+shadowJar {
+    mergeServiceFiles()
+}
+
+run.classpath += configurations.developmentOnly
+test.classpath += configurations.developmentOnly
+run.jvmArgs('-noverify', '-XX:TieredStopAtLevel=1')
+
+mainClassName = "beanstalk.app.Application"
+// use JUnit 5 platform
+test {
+    useJUnitPlatform()
+}
+tasks.withType(JavaCompile){
+    options.encoding = "UTF-8"
+    options.compilerArgs.add('-parameters')
+}
+
+// ECR
+String registryHost = '281741939716.dkr.ecr.eu-west-3.amazonaws.com'
+docker {
+    registryCredentials {
+        url = "https://$registryHost/"
+    }
+}
+
+task buildImage(type: com.bmuschko.gradle.docker.tasks.image.DockerBuildImage) {
+    dependsOn shadowJar
+    inputDir = file('.')
+    tags.add("$registryHost/beanstalk-app:latest")
+}
+
+task pushImage(type: com.bmuschko.gradle.docker.tasks.image.DockerPushImage) {
+    dependsOn buildImage
+    imageName = "$registryHost/beanstalk-app"
+    tag = 'latest'
+}
+
+// deployment
+version = '0.1-SNAPSHOT'
+
+// requires AmazonEC2ContainerRegistryReadOnly for aws-elasticbeanstalk-ec2-role
+task buildArchive(type: Zip) {
+    from file('src/main/eb')
+}
+
+beanstalk {
+    s3Endpoint = "s3-eu-west-3.amazonaws.com"
+    beanstalkEndpoint = "elasticbeanstalk.eu-west-3.amazonaws.com"
+
+    deployments {
+        // Example to create a new env for each version (to use URL swapping for blue/green deployment)
+        production {
+            file = tasks.buildArchive
+            application = 'beanstalk-app'
+            environment = "beanstalk-app"
+        }
+    }
+}
