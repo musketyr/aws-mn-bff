@@ -1,0 +1,15 @@
+micronaut:
+  application:
+    name: beanstalk-app
+  config-client:
+    enabled: true
+    # for debugging
+    read-timeout: 1000s
+
+# requires AmazonSSMReadOnlyAccess policy
+aws:
+  client:
+    system-manager:
+      parameterstore:
+        enabled: true
+        useSecureParameters: true

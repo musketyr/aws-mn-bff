@@ -30,6 +30,11 @@ configurations {
 }
 
 dependencies {
+    // aws parameter store
+    compile "io.micronaut:micronaut-discovery-client"
+    compile "io.micronaut.configuration:micronaut-aws-common"
+    compile group: 'com.amazonaws', name: 'aws-java-sdk-ssm', version: '1.11.308'
+
     annotationProcessor "io.micronaut:micronaut-inject-java"
     annotationProcessor "io.micronaut:micronaut-validation"
     compile "io.micronaut:micronaut-inject"
@@ -71,7 +76,7 @@ docker {
 }
 
 task buildImage(type: com.bmuschko.gradle.docker.tasks.image.DockerBuildImage) {
-    dependsOn shadowJar
+    dependsOn clean, shadowJar
     inputDir = file('.')
     tags.add("$registryHost/beanstalk-app:latest")
 }
